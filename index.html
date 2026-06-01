@@ -17,48 +17,66 @@
     <video id="video" autoplay playsinline></video>
     <br>
     <button id="capture">Capture Frame</button>
-    <div id="status">Status: Camera streaming...</div>
+    <div id="status">Status: Initializing camera...</div>
 
     <script>
-        captureButton.addEventListener('click', () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    const base64Image = canvas.toDataURL('image/jpeg');
+        const video = document.getElementById('video');
+        const captureButton = document.getElementById('capture');
+        const statusDiv = document.getElementById('status');
 
-    // FIX FOR NEXT-TAB DEMO:
-    // Look backward at the original Pega tab that opened this camera window
-    try {
-        if (window.opener && !window.opener.closed) {
-            // Find the text field inside the main Pega tab
-            const pegaInputField = window.opener.document.querySelector('input[data-test-id="photo-string-input"]');
-            
-            if (pegaInputField) {
-                pegaInputField.value = base64Image;
-                
-                // Trigger the input event so Pega registers the change
-                pegaInputField.dispatchEvent(new Event('input', { bubbles: true }));
-                
-                statusDiv.innerText = "✓ Photo sent back to the Pega Tab! You can close this tab.";
-                statusDiv.style.color = "blue";
-            } else {
-                statusDiv.innerText = "Error: Text field not found in Pega tab.";
-                statusDiv.style.color = "red";
-            }
+        // 1. Safely request browser webcam stream
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
+                .then(stream => {
+                    video.srcObject = stream;
+                    statusDiv.innerText = "Status: Camera streaming ready.";
+                    statusDiv.style.color = "green";
+                })
+                .catch(err => {
+                    statusDiv.innerText = "Error: Camera permission denied or device not found.";
+                    statusDiv.style.color = "red";
+                    console.error(err);
+                });
         } else {
-            statusDiv.innerText = "Error: Original Pega tab was closed.";
+            statusDiv.innerText = "Error: Browser does not support media capture.";
             statusDiv.style.color = "red";
         }
-    } catch(e) {
-        statusDiv.innerText = "Security block: Tabs must be on the same domain or allowed.";
-        statusDiv.style.color = "red";
-        console.error(e);
-    }
-});
 
+        // 2. Capture frame and broadcast safely to the opener window
+        captureButton.addEventListener('click', () => {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Compress frame to a clean Base64 JPEG string
+                const base64Image = canvas.toDataURL('image/jpeg', 0.7);
+
+                // 3. SECURE CROSS-DOMAIN HANDOFF: Send data back to the Pega tab
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: "WEBCAM_CAPTURE",
+                        imageData: base64Image
+                    }, "*"); // "*" allows the message to cross domain boundaries safely for a POC
+                    
+                    statusDiv.innerText = "✓ Photo sent back to Pega! Closing window in 2 seconds...";
+                    statusDiv.style.color = "blue";
+                    
+                    // Automatically close the tab after 2 seconds to look professional
+                    setTimeout(() => { window.close(); }, 2000);
+                } else {
+                    statusDiv.innerText = "Error: Could not find original Pega tab connection.";
+                    statusDiv.style.color = "red";
+                }
+            } catch(e) {
+                statusDiv.innerText = "Execution error during capture.";
+                statusDiv.style.color = "red";
+                console.error(e);
+            }
+        });
     </script>
 </body>
 </html>
