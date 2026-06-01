@@ -20,34 +20,7 @@
     <div id="status">Status: Camera streaming...</div>
 
     <script>
-        const video = document.getElementById('video');
-        const captureButton = document.getElementById('capture');
-        const statusDiv = document.getElementById('status');
-
-        // 1. Instantly request browser webcam stream
-        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-            .then(stream => {
-                video.srcObject = stream;
-            })
-            .catch(err => {
-                statusDiv.innerText = "Error: Camera blocked or unavailable.";
-                statusDiv.style.color = "red";
-                console.error(err);
-            });
-
-        // 2. Capture a frame and broadcast it outward
         captureButton.addEventListener('click', () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Turn frame into a lightweight Base64 text string
-            const base64Image = canvas.toDataURL('image/jpeg');
-
-            // 3. Broadcast the image data out of the Iframe to the parent (Pega) page
-            captureButton.addEventListener('click', () => {
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -56,31 +29,36 @@
     
     const base64Image = canvas.toDataURL('image/jpeg');
 
-    // NEW LOGIC FOR THE LIVE DEMO:
-    // Look up into the parent Pega window, find the text field, and paste the image string directly into it
+    // FIX FOR NEXT-TAB DEMO:
+    // Look backward at the original Pega tab that opened this camera window
     try {
-        const pegaInputField = window.parent.document.querySelector('input[data-test-id="photo-string-input"]');
-        if (pegaInputField) {
-            pegaInputField.value = base64Image;
+        if (window.opener && !window.opener.closed) {
+            // Find the text field inside the main Pega tab
+            const pegaInputField = window.opener.document.querySelector('input[data-test-id="photo-string-input"]');
             
-            // Trigger a native input event so Pega's React state catches the change automatically
-            pegaInputField.dispatchEvent(new Event('input', { bubbles: true }));
-            statusDiv.innerText = "✓ Photo sent straight into the Pega field!";
-            statusDiv.style.color = "blue";
+            if (pegaInputField) {
+                pegaInputField.value = base64Image;
+                
+                // Trigger the input event so Pega registers the change
+                pegaInputField.dispatchEvent(new Event('input', { bubbles: true }));
+                
+                statusDiv.innerText = "✓ Photo sent back to the Pega Tab! You can close this tab.";
+                statusDiv.style.color = "blue";
+            } else {
+                statusDiv.innerText = "Error: Text field not found in Pega tab.";
+                statusDiv.style.color = "red";
+            }
         } else {
-            statusDiv.innerText = "Error: Pega text field not found on screen.";
+            statusDiv.innerText = "Error: Original Pega tab was closed.";
             statusDiv.style.color = "red";
         }
     } catch(e) {
-        // If security restricts direct access, fallback to broadcasting
-        window.parent.postMessage({ type: "WEBCAM_CAPTURE", imageData: base64Image }, "*");
+        statusDiv.innerText = "Security block: Tabs must be on the same domain or allowed.";
+        statusDiv.style.color = "red";
+        console.error(e);
     }
 });
 
-
-            statusDiv.innerText = "✓ Photo snapshot broadcasted to Pega!";
-            statusDiv.style.color = "blue";
-        });
     </script>
 </body>
 </html>
