@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pega Webcam Capture POC</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin: 20px; background: #f5f5f5; }
+        video { width: 100%; max-width: 400px; border-radius: 8px; border: 2px solid #ccc; background: black; }
+        button { padding: 12px 24px; font-size: 16px; margin: 10px; background: #0056b3; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #004085; }
+        #status { font-weight: bold; color: green; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <h3>📷 Case Webcam Capture POC</h3>
+    <video id="video" autoplay playsinline></video>
+    <br>
+    <button id="capture">Capture Frame</button>
+    <div id="status">Status: Camera streaming...</div>
+
+    <script>
+        const video = document.getElementById('video');
+        const captureButton = document.getElementById('capture');
+        const statusDiv = document.getElementById('status');
+
+        // 1. Instantly request browser webcam stream
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                statusDiv.innerText = "Error: Camera blocked or unavailable.";
+                statusDiv.style.color = "red";
+                console.error(err);
+            });
+
+        // 2. Capture a frame and broadcast it outward
+        captureButton.addEventListener('click', () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Turn frame into a lightweight Base64 text string
+            const base64Image = canvas.toDataURL('image/jpeg');
+
+            // 3. Broadcast the image data out of the Iframe to the parent (Pega) page
+            captureButton.addEventListener('click', () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    const base64Image = canvas.toDataURL('image/jpeg');
+
+    // NEW LOGIC FOR THE LIVE DEMO:
+    // Look up into the parent Pega window, find the text field, and paste the image string directly into it
+    try {
+        const pegaInputField = window.parent.document.querySelector('input[data-test-id="photo-string-input"]');
+        if (pegaInputField) {
+            pegaInputField.value = base64Image;
+            
+            // Trigger a native input event so Pega's React state catches the change automatically
+            pegaInputField.dispatchEvent(new Event('input', { bubbles: true }));
+            statusDiv.innerText = "✓ Photo sent straight into the Pega field!";
+            statusDiv.style.color = "blue";
+        } else {
+            statusDiv.innerText = "Error: Pega text field not found on screen.";
+            statusDiv.style.color = "red";
+        }
+    } catch(e) {
+        // If security restricts direct access, fallback to broadcasting
+        window.parent.postMessage({ type: "WEBCAM_CAPTURE", imageData: base64Image }, "*");
+    }
+});
+
+
+            statusDiv.innerText = "✓ Photo snapshot broadcasted to Pega!";
+            statusDiv.style.color = "blue";
+        });
+    </script>
+</body>
+</html>
